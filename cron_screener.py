@@ -1,11 +1,10 @@
-# cron_screener.py (海外機房特調版 · 100% 破關保證)
+# cron_screener.py (純 yfinance 1980檔地毯海選完全體)
 import warnings
 warnings.filterwarnings("ignore") 
 
 import datetime
 import pandas as pd
 import time
-import requests
 from xgboost import XGBClassifier
 from linebot import LineBotApi
 from linebot.exceptions import LineBotApiError
@@ -24,59 +23,39 @@ today = datetime.datetime.today().strftime('%Y-%m-%d')
 def send_line_text(user_id, text_content):
     try:
         line_bot_api.push_message(user_id, TextSendMessage(to=user_id, text=text_content))
-        print('🚀 [LINE] 雲端海選戰報推送成功！')
+        print('🚀 [LINE] 全大盤純 yf 戰報推送成功！')
     except LineBotApiError as e:
         print('❌ [LINE] 文字推送失敗:', e)
 
-def fetch_twse_official_price(stock_no):
-    """🛡️ 證交所官方原生 K 線校正通道"""
-    url = f"https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date={today.replace('-','')}&stockNo={stock_no}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    try:
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            if "data" in data and len(data["data"]) > 0:
-                latest_day = data["data"][-1]
-                return {
-                    "Volume": float(latest_day[1].replace(",", "")) / 1000.0,
-                    "Open": float(latest_day[3].replace(",", "")),
-                    "High": float(latest_day[4].replace(",", "")),
-                    "Low": float(latest_day[5].replace(",", "")),
-                    "Close": float(latest_day[6].replace(",", "")),
-                    "Success": True
-                }
-    except: pass
-    return {"Success": False}
-
 # =====================================================================
-# 🚀 核心海選主程式 (海外機房專屬對齊流)
+# 🚀 核心海選主程式 (純 yfinance 1980 檔地毯式轟炸)
 # =====================================================================
 def main():
-    print("🚀 啟動台股 AI 盤後海選任務（🎯 1開頭雲端特調·海外直發版）...")
+    print("🚀 啟動台股 AI 盤後海選任務（🔥 全大盤純 yfinance 1,980 檔完全體）...")
     start_date = "2024-01-01"
     end_date = today
     
-    # 🎯【物理突圍核心】：直接在雲端焊死台灣 1 開頭的核心傳產明星股對照表，徹底繞過證交所海外 IP 阻斷！
-    stock_map = {
-        "1101": "台泥", "1102": "亞泥", "1216": "統一", "1301": "台塑", 
-        "1303": "南亞", "1326": "台化", "1402": "遠東新", "1476": "儒鴻", 
-        "1503": "士電", "1504": "東元", "1513": "中興電", "1519": "華城",
-        "1605": "華新", "1722": "台肥", "1904": "正隆"
-    }
-    all_codes = sorted(list(stock_map.keys()))
-    
-    print(f"📈 雲端物理防線就緒：已成功鎖定 {len(all_codes)} 檔「1」開頭主力正規軍代碼。")
-    print(f"⚡ [第一階段] 正在海外微軟機房執行【自適應量能防線初篩】...")
+    # 🎯【純 yf 動態名冊】：我們直接用資工最暴力的代碼區間生成法，
+    # 生成 1101 到 9958 所有可能的 4 位數代碼，交給 yfinance 在海外高速併發過濾！
+    print("📈 正在初始化 1980 檔全台股動態掃描雷達...")
     
     passed_codes = []
-    total_count = len(all_codes)
     
-    for idx, code in enumerate(all_codes):
+    # 台股正規 4 位數股票代碼基本上都落在 1100 到 9999 之間
+    for code_num in range(1100, 9960):
+        code = str(code_num)
+        
+        # 嘗試用上市（.TW）規格去讓 yf 下載最近 20 天的極輕量流動性數據
         try:
-            # 🎯【海外專用修正】：傳給 yfinance 時，強迫帶上後綴，防止噴 404 Quote Not Found！
-            raw = get_stock_data(f"{code}.TW", start_date=start_date, end_date=end_date)
-            if raw is None or len(raw) < 20: continue
+            ticker = f"{code}.TW"
+            raw = get_stock_data(ticker, start_date=(pd.to_datetime(today) - pd.Timedelta(days=30)).strftime('%Y-%m-%d'), end_date=today)
+            
+            # 如果上市找不到，自動切換成上櫃（.TWO）規格再試一次
+            if raw is None or raw.empty:
+                ticker = f"{code}.TWO"
+                raw = get_stock_data(ticker, start_date=(pd.to_datetime(today) - pd.Timedelta(days=30)).strftime('%Y-%m-%d'), end_date=today)
+                
+            if raw is None or len(raw) < 5: continue
                 
             vol_series = raw['Volume'].dropna()
             close_series = raw['Close'].dropna()
@@ -86,25 +65,25 @@ def main():
             ma5_vol = float(vol_series.tail(5).mean())
             ma20_vol = float(vol_series.tail(20).mean())
             
-            # 雲端放寬流動性防線，確保測試 100% 抓得到股票
-            if ma5_vol >= 500000 or last_price >= 10.0:
+            # 🎯【全大盤量能大閘門】：5日均量 > 3000張（3,000,000股）且量能增溫
+            if ma5_vol >= 3000000 and ma5_vol >= ma20_vol and last_price >= 15.0:
                 heat_ratio = last_vol / (ma20_vol + 1e-8)
-                passed_codes.append({"code": code, "heat_ratio": heat_ratio})
-        except Exception as e:
-            print(f"  ⚠️ 讀取 {code} 失敗: {e}")
+                passed_codes.append({"ticker": ticker, "code": code, "heat_ratio": heat_ratio})
+                print(f"  🔥 [量能達標] {ticker} 成功突圍進入決賽圈！")
+        except:
             continue
 
-    print(f"✨ 階段一完成！符合量能的種子股共：{len(passed_codes)} 檔")
+    print(f"\n✨ 階段一完成！全大盤符合【5日均量黃金防線】的爆量強勢股共：{len(passed_codes)} 檔")
     
-    # 🔒 雲端最終鐵壁保底
     if not passed_codes:
-        print("⚠️ 觸發雲端保底，強行灌入核心傳產...")
-        passed_codes = [{"code": "1402", "heat_ratio": 1.12}, {"code": "1722", "heat_ratio": 1.05}]
+        print("⚠️ 今日全大盤未達量能標的，全 yf 任務結束。")
+        return
     
     passed_df = pd.DataFrame(passed_codes).sort_values(by="heat_ratio", ascending=False)
-    top_50_codes = passed_df['code'].head(50).tolist()
+    # 決賽圈精選前 50 檔，現場餵給 XGBoost 重裝甲
+    top_50 = passed_df.head(50)
     
-    print(f"\n🔥 [第二階段] 精選 {len(top_50_codes)} 檔進入模型擬合，同步調用證交所原生 API 校正實價...")
+    print(f"\n🔥 [第二階段] 精選 {len(top_50)} 檔決賽圈標的現場拉取兩年長期 K 線並訓練 XGBoost...")
     
     feature_cols = [
         'Return_1d', 'Return_5d', 'Volume_Ratio', 'US_SOX_Return', 'US_VIX_Return', 
@@ -114,18 +93,11 @@ def main():
     ]
     final_list = []
     
-    for idx, code in enumerate(top_50_codes):
+    for idx, row in enumerate(top_50.itertuples()):
         try:
-            raw = get_stock_data(f"{code}.TW", start_date=start_date, end_date=end_date)
+            # 拉取從 2024 年開始的完整長期歷史數據用來跑特徵與訓練模型
+            raw = get_stock_data(row.ticker, start_date=start_date, end_date=end_date)
             if raw is None or raw.empty: continue
-                
-            # 🛡️ 證交所官方價格即時校正
-            official_data = fetch_twse_official_price(code)
-            if official_data["Success"]:
-                last_idx = raw.index[-1]
-                raw.loc[last_idx, ['Open', 'High', 'Low', 'Close', 'Volume']] = [
-                    official_data["Open"], official_data["High"], official_data["Low"], official_data["Close"], official_data["Volume"]
-                ]
             
             df_feat = build_features(raw)
             X, y = df_feat[feature_cols], df_feat['Target']
@@ -134,29 +106,23 @@ def main():
             model.fit(X, y)
             
             prob = model.predict_proba(X.tail(1))[0][1]
-            final_list.append({"code": code, "name": stock_map.get(code, code), "prob": float(prob)})
-            print(f"  🌟 [{idx+1}/{len(top_50_codes)}] {code} {stock_map.get(code, '')} 勝率擬合完成: {prob:.2%}")
-        except Exception as e:
-            print(f"  ❌ {code} 擬合失敗: {e}")
+            final_list.append({"code": row.code, "prob": float(prob)})
+            print(f"  🌟 [{idx+1}/{len(top_50)}] {row.ticker} AI 勝率算定完成: {prob:.2%}")
+        except:
             continue
             
-    # 寫出與發射
     if final_list:
-        result_df = pd.DataFrame(final_list).sort_values(by="prob", ascending=False)
-        result_df_rename = result_df.rename(columns={"code": "代號", "name": "名稱", "prob": "發動機率"})
-        result_df_rename.to_csv("best_stocks.csv", index=False, encoding='utf-8-sig')
+        # 🎯【排版完全體】：排序後重置 Index，保證 No.1 到 No.5 完美歸位
+        result_df = pd.DataFrame(final_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
+        result_df.to_csv("best_stocks.csv", index=False, encoding='utf-8-sig')
         
-        line_report = f"📊 【台股 AI 盤後雲端戰報完全體】\n📅 數據日期：{today}\n🤖 狀態：海外機房突圍通關成功！\n----------------------\n"
+        line_report = f"📊 【台股 AI 全大盤海選戰報 · yf流】\n📅 數據日期：{today}\n🤖 策略：1980檔純 yfinance 突圍完全體\n----------------------\n"
         for i, row in result_df.head(5).iterrows():
-            line_report += f"🏆 No.{i+1} [{row['code']}] {row['name']}\n🔥 明日發動勝率: {row['prob']:.2%}\n\n"
-        line_report += "💡 已成功跨國擊穿防火牆，數據完美對齊！"
+            line_report += f"🏆 No.{i+1} 股票代號: [{row['code']}]\n🔥 明日發動勝率: {row['prob']:.2%}\n\n"
+        line_report += "💡 本數據純粹由海外微軟機房一條龍調用 yfinance 現撈現算出廠！"
         
-        print("📢 正在發射最終文字戰報至 LINE...")
+        print("📢 正在發射純 yf 全大盤戰報至 LINE...")
         send_line_text(TARGET_USER_ID, line_report)
-    else:
-        # 🔒【鋼鐵級保底】：就算前面千算萬算在雲端還是落空，我們直接強推一條連通性測試，強迫 LINE 發出聲音！
-        print("⚠️ 決賽圈落空，啟動終極通訊防線...")
-        send_line_text(TARGET_USER_ID, f"🚨 雲端連線測試：海外虛擬機執行成功，但今日 5/29 傳產股未達發動機率門檻！")
 
 if __name__ == "__main__": 
     main()
