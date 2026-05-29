@@ -1,7 +1,7 @@
 name: 台股 AI 1開頭雲端極速測試
 
 on:
-  workflow_dispatch: # 🔒 這一行是外掛核心！它允許我們在網頁上「手動按下一鍵點火」
+  workflow_dispatch: # 允許網頁上手動一鍵點火
 
 jobs:
   run-ai-test:
@@ -17,7 +17,8 @@ jobs:
 
     - name: 安裝硬核量化套件
       run: |
-        pip install pandas yfinance xgboost ta requests line-bot-sdk pillow pyppeteer openpyxl
+        # 🎯 這裡強行補上 scikit-learn，徹底填滿 XGBoost 的底層天坑！
+        pip install pandas yfinance xgboost ta requests line-bot-sdk pillow openpyxl scikit-learn
 
     - name: 強行啟動 1開頭限定海選與 LINE 雙推
       run: |
