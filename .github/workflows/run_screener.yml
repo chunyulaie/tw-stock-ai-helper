@@ -1,25 +1,32 @@
-name: 台股 AI 1開頭雲端極速測試
+name: Taiwan Stock AI Auto Screener
 
 on:
-  workflow_dispatch: # 允許網頁上手動一鍵點火
+  # 🎯 手動觸發開關：讓你想測試時，隨時點網頁就能按
+  workflow_dispatch:
+
+  # 🎯 雲端定時開關（Cron Job）：設定台北時間每週日到週四晚上 22:00 自動開炸戰報
+  # 換算 UTC 時間為：每週日到週四下午 14:00
+  schedule:
+    - cron: '0 14 * * 0-4'
 
 jobs:
-  run-ai-test:
+  screener_job:
     runs-on: ubuntu-latest
+
     steps:
-    - name: 複製雲端代碼
+    - name: Checkout Repository
       uses: actions/checkout@v3
 
-    - name: 初始化 Python 3.10 環境
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
-    - name: 安裝硬核量化套件
+    - name: Install Dependencies
       run: |
-        # 🎯 這裡強行補上 scikit-learn，徹底填滿 XGBoost 的底層天坑！
-        pip install pandas yfinance xgboost ta requests line-bot-sdk pillow openpyxl scikit-learn
+        python -m pip install --upgrade pip
+        pip install yfinance pandas xgboost ta scikit-learn line-bot-sdk requests
 
-    - name: 強行啟動 1開頭限定海選與 LINE 雙推
+    - name: Run AI Screener Engine
       run: |
         python cron_screener.py
