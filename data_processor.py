@@ -1,4 +1,4 @@
-# data_processor.py (Big5 編碼校正·真全台股名冊完全體)
+# data_processor.py (技術指標參數新版對齊完全體)
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -37,10 +37,8 @@ def get_clean_stock_map():
     global _TW_STOCK_MAP
     if _TW_STOCK_MAP is not None: return _TW_STOCK_MAP
     stock_map = {}
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     try:
-        # 1. 抓取上市最完整名冊網頁 (強制鎖定 Big5 編碼)
         res_l = requests.get("https://isin.twse.com.tw/isin/C_public.jsp?strMode=2", headers=headers, timeout=5)
         if res_l.status_code == 200:
             res_l.encoding = 'big5'
@@ -51,25 +49,8 @@ def get_clean_stock_map():
                     parts = str(val).split('\u3000')
                     if len(parts) >= 2:
                         code, name = parts[0].strip(), parts[1].strip()
-                        if len(code) == 4 and code.isdigit():
-                            stock_map[code] = name
-                            
-        # 2. 抓取上櫃最完整名冊網頁 (強制鎖定 Big5 編碼)
-        res_o = requests.get("https://isin.twse.com.tw/isin/C_public.jsp?strMode=4", headers=headers, timeout=5)
-        if res_o.status_code == 200:
-            res_o.encoding = 'big5'
-            dfs = pd.read_html(res_o.text)
-            if dfs:
-                df = dfs[0]
-                for val in df[0].dropna():
-                    parts = str(val).split('\u3000')
-                    if len(parts) >= 2:
-                        code, name = parts[0].strip(), parts[1].strip()
-                        if len(code) == 4 and code.isdigit():
-                            stock_map[code] = name
-    except:
-        pass
-        
+                        if len(code) == 4 and code.isdigit(): stock_map[code] = name
+    except: pass
     _TW_STOCK_MAP = stock_map
     return _TW_STOCK_MAP
 
@@ -114,7 +95,9 @@ def get_stock_data(user_input, start_date, end_date):
             
         df['US_SOX_Return'] = sox_close.pct_change(1).shift(1)
         df['US_VIX_Return'] = vix_close.pct_change(1).shift(1)
-        tw_ma20 = SMAIndicator(close=tw_close, n=20).sma_indicator() if len(tw_close)>20 else tw_close
+        
+        # 🎯【參數修正一】：新版 ta 套件全面改用 window=
+        tw_ma20 = SMAIndicator(close=tw_close, window=20).sma_indicator() if len(tw_close)>20 else tw_close
         df['Market_Bias_20d'] = (tw_close / tw_ma20) - 1
         df['US_SOX_Return'] = df['US_SOX_Return'].ffill().fillna(0)
         df['US_VIX_Return'] = df['US_VIX_Return'].ffill().fillna(0)
@@ -145,17 +128,19 @@ def build_features(df):
     feat_df['Main_Force_Flow'] = clv * volume_series.pct_change(1)
     feat_df['Chaikin_Money_Flow'] = (clv * volume_series).rolling(20).sum() / (volume_series.rolling(20).sum() + 1e-8)
     
-    ma5 = SMAIndicator(close=close_series, n=5).sma_indicator()
-    ma20 = SMAIndicator(close=close_series, n=20).sma_indicator()
-    ma60 = SMAIndicator(close=close_series, n=60).sma_indicator()
+    # 🎯【參數修正二】：這裡就是害我們全軍覆沒的罪魁禍首，通通把 n= 改成 window=
+    ma5 = SMAIndicator(close=close_series, window=5).sma_indicator()
+    ma20 = SMAIndicator(close=close_series, window=20).sma_indicator()
+    ma60 = SMAIndicator(close=close_series, window=60).sma_indicator()
     feat_df['Close_to_MA5'] = (close_series / ma5) - 1
     feat_df['Close_to_MA20'] = (close_series / ma20) - 1
     feat_df['Close_to_MA60'] = (close_series / ma60) - 1
     feat_df['MA5_to_MA20'] = (ma5 / ma20) - 1
     
-    feat_df['RSI'] = RSIIndicator(close=close_series, n=14).rsi()
-    feat_df['MACD_Hist_Norm'] = MACD(close=close_series, n_fast=12, n_slow=26, n_sign=9).macd_diff() / close_series
-    bb_init = BollingerBands(close=close_series, n=20, ndev=2)
+    # 🎯【參數修正三】：RSI、MACD、布林通道參數同步新版對齊
+    feat_df['RSI'] = RSIIndicator(close=close_series, window=14).rsi()
+    feat_df['MACD_Hist_Norm'] = MACD(close=close_series, window_fast=12, window_slow=26, window_sign=9).macd_diff() / close_series
+    bb_init = BollingerBands(close=close_series, window=20, window_dev=2)
     feat_df['BB_Position'] = (close_series - bb_init.bollinger_lband()) / (bb_init.bollinger_hband() - bb_init.bollinger_lband() + 1e-8)
     feat_df['Weekday'] = df.index.weekday
     feat_df['Month'] = df.index.month
