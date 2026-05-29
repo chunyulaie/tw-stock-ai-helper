@@ -1,0 +1,24 @@
+name: 台股 AI 1開頭雲端極速測試
+
+on:
+  workflow_dispatch: # 🔒 這一行是外掛核心！它允許我們在網頁上「手動按下一鍵點火」
+
+jobs:
+  run-ai-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 複製雲端代碼
+      uses: actions/checkout@v3
+
+    - name: 初始化 Python 3.10 環境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 安裝硬核量化套件
+      run: |
+        pip install pandas yfinance xgboost ta requests line-bot-sdk pillow pyppeteer openpyxl
+
+    - name: 強行啟動 1開頭限定海選與 LINE 雙推
+      run: |
+        python cron_screener.py

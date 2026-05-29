@@ -1,0 +1,11 @@
+# requirements.txt
+streamlit
+yfinance
+pandas
+numpy
+requests
+xgboost
+scikit-learn
+ta
+lxml
+FinMind
